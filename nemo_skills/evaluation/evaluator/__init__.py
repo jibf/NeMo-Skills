@@ -20,6 +20,7 @@ from nemo_skills.evaluation.evaluator.code import (
     eval_livecodebench,
     eval_livecodebench_pro,
 )
+from nemo_skills.evaluation.evaluator.drafterbench import eval_drafterbench
 from nemo_skills.evaluation.evaluator.ifbench import eval_ifbench
 from nemo_skills.evaluation.evaluator.ifeval import eval_if
 from nemo_skills.evaluation.evaluator.ioi import eval_ioi
@@ -44,6 +45,7 @@ EVALUATOR_MAP = {
     "if": eval_if,
     "ifbench": eval_ifbench,
     "bfcl": eval_bfcl,
+    "drafterbench": eval_drafterbench,
     "no-op": dummy_eval,
     "lean4-proof": eval_lean4_proof,
     "lean4-statement": eval_lean4_statement,
