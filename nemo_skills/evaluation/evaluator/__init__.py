@@ -35,6 +35,7 @@ from nemo_skills.evaluation.evaluator.math import (
 )
 from nemo_skills.evaluation.evaluator.mcq import eval_mcq
 from nemo_skills.evaluation.evaluator.mrcr import eval_mrcr
+from nemo_skills.evaluation.evaluator.multi_challenge import eval_multi_challenge
 from nemo_skills.evaluation.evaluator.ruler import eval_ruler
 from nemo_skills.evaluation.evaluator.scicode import eval_scicode
 
@@ -53,6 +54,7 @@ EVALUATOR_MAP = {
     "mrcr": eval_mrcr,
     "bigcodebench": eval_bigcodebench,
     "human_eval_infilling": eval_human_eval_infilling,
+    "multi_challenge": eval_multi_challenge,
 }
 
 # Evaluator class mapping, other evaluators can be added here as they're converted to classes
