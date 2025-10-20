@@ -14,60 +14,78 @@
 
 import json
 import logging
-import shutil
-import sys
+from collections import defaultdict
 from pathlib import Path
 
 LOG = logging.getLogger(__file__)
 
+# Mapping from AXIS names to split directory names
+AXIS_TO_SPLIT = {
+    "INFERENCE_MEMORY": "inference_memory",
+    "INSTRUCTION_RETENTION": "instruction_retention",
+    "RELIABLE_VERSION_EDITING": "reliable_version_editing",
+    "SELF_COHERENCE": "self_coherence",
+}
 
-def download_data(input_path, output_path):
-    """
-    Download and prepare MultiChallenge dataset.
 
-    Args:
-        input_path: Path to the original MultiChallenge benchmark_questions.jsonl file
-        output_path: Output directory path
-    """
-    output_path = Path(output_path)
-    output_path.mkdir(parents=True, exist_ok=True)
+def prepare_multi_challenge_data(output_path=None):
+    """Prepare MultiChallenge dataset by splitting data into task type subdirectories."""
+    script_dir = Path(__file__).parent
 
-    # Copy the original benchmark questions file
-    input_file = Path(input_path) / "benchmark_questions.jsonl"
-    output_file = output_path / "test.jsonl"
+    if output_path is None:
+        output_path = script_dir
+    else:
+        output_path = Path(output_path)
+
+    # Input file is in the same directory as this script
+    input_file = script_dir / "benchmark_questions.jsonl"
 
     if not input_file.exists():
-        raise FileNotFoundError(f"Input file not found: {input_file}")
+        raise FileNotFoundError(
+            f"Input file not found: {input_file}\n"
+            f"The MultiChallenge benchmark_questions.jsonl file should be included in the repository."
+        )
 
-    # Read and convert the data to NeMo-Skills format
-    with open(input_file, 'r', encoding='utf-8') as f_in, \
-         open(output_file, 'w', encoding='utf-8') as f_out:
+    axis_data = defaultdict(list)
 
+    with open(input_file, 'r', encoding='utf-8') as f_in:
         for line in f_in:
             data = json.loads(line)
-
-            # Convert to NeMo-Skills format
             converted_data = {
                 "question_id": data["QUESTION_ID"],
                 "axis": data["AXIS"],
                 "conversation": data["CONVERSATION"],
                 "target_question": data["TARGET_QUESTION"],
                 "pass_criteria": data["PASS_CRITERIA"],
-                "expected_answer": None,  # Multi-challenge uses LLM judge, no ground truth
+                "expected_answer": None,
             }
+            axis_data[data["AXIS"]].append(converted_data)
 
-            f_out.write(json.dumps(converted_data) + '\n')
+    for axis, axis_name in AXIS_TO_SPLIT.items():
+        if axis not in axis_data:
+            LOG.warning(f"No data found for axis: {axis}")
+            continue
 
-    LOG.info(f"Data prepared successfully at {output_file}")
+        split_dir = output_path / axis_name
+        split_dir.mkdir(parents=True, exist_ok=True)
+        output_file = split_dir / "test.jsonl"
+        with open(output_file, 'w', encoding='utf-8') as f_out:
+            for item in axis_data[axis]:
+                f_out.write(json.dumps(item) + '\n')
+
+        print(f"  {axis_name:30s}: {len(axis_data[axis]):3d} questions → {output_file}")
+
+    print(f"\nMultiChallenge data prepared successfully!")
+    print(f"Total: {sum(len(items) for items in axis_data.values())} questions across {len(axis_data)} axes")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python prepare.py <input_path> <output_path>")
-        print("Example: python prepare.py /path/to/multi_challenge/data /path/to/output")
-        sys.exit(1)
+    import sys
 
-    input_path = sys.argv[1]
-    output_path = sys.argv[2]
+    if len(sys.argv) > 1:
+        output_path = sys.argv[1]
+    else:
+        # Default: prepare in the current dataset directory
+        output_path = None
 
-    download_data(input_path, output_path)
+    prepare_multi_challenge_data(output_path)

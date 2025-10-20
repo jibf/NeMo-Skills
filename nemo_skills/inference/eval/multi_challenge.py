@@ -38,14 +38,9 @@ LOG = logging.getLogger(get_logger_name(__file__))
 class MultiChallengeGenerationConfig(GenerateSolutionsConfig):
     """MultiChallenge benchmark generation."""
 
-    # Inheritance was converting these dataclasses to dicts, so to be on the safe side we override them
-    inference: InferenceConfig = field(default_factory=InferenceConfig)  # LLM call parameters
-    # Inference server configuration {server_params}
+    inference: InferenceConfig = field(default_factory=InferenceConfig)
     server: dict = field(default_factory=dict)
-
-    attempts: int = 1  # Number of attempts to generate for each conversation
-
-    # Override defaults to use openai format (no prompt_config needed)
+    attempts: int = 1
     prompt_format: str = "openai"
     prompt_config: str | None = None
 
@@ -62,108 +57,66 @@ class MultiChallengeGenerationTask(GenerationTask):
         self.attempts = cfg.attempts
 
     def log_example_prompt(self, data):
-        """MultiChallenge is a conversational benchmark."""
         LOG.info("Example conversation:")
         if data and len(data) > 0:
             conversation = data[0].get("conversation", [])
-            for turn in conversation[:2]:  # Show first 2 turns
+            for turn in conversation[:2]:
                 LOG.info(f"  {turn['role']}: {turn['content'][:100]}...")
 
     def setup_prompt(self):
-        """No special prompt setup needed for MultiChallenge."""
         return None
 
     def preprocess_data(self, data):
-        """Preprocess data to wrap conversations in messages key for openai format."""
         for data_point in data:
-            # Wrap conversation in messages key for openai format
             if "conversation" in data_point and "messages" not in data_point:
                 data_point["messages"] = data_point["conversation"]
         return data
 
     async def process_single_datapoint(self, data_point, all_data):
-        """Process a single data point and generate responses.
-
-        Args:
-            data_point: Dictionary containing:
-                - messages: List of message dicts with 'role' and 'content'
-                - question_id, axis, target_question, pass_criteria
-            all_data: Full dataset (not used in MultiChallenge)
-
-        Returns:
-            Dictionary with generated responses
-        """
         from dataclasses import asdict as dc_asdict, is_dataclass
 
-        # Handle inference config - check if it's a dataclass or already a dict
         if is_dataclass(self.cfg.inference):
             inference_params = dc_asdict(self.cfg.inference)
         else:
-            # Already a dict from Hydra
             inference_params = dict(self.cfg.inference)
 
-        # Generate multiple attempts
         responses = []
         for attempt_idx in range(self.attempts):
             try:
-                # Get the prompt using the base class method
                 prompt = self.fill_prompt(data_point, all_data)
-
-                # Generate using the LLM
-                output_dict = await self.generate_with_semaphore(
-                    prompt=prompt,
-                    **inference_params,
-                )
-
-                generation = output_dict.get("generation", "")
-                responses.append(generation)
-
-                LOG.debug(f"Attempt {attempt_idx + 1}/{self.attempts} completed for question {data_point.get('question_id', 'unknown')}")
-
+                output_dict = await self.generate_with_semaphore(prompt=prompt, **inference_params)
+                responses.append(output_dict.get("generation", ""))
             except Exception as e:
-                LOG.error(f"Error in attempt {attempt_idx + 1} for question {data_point.get('question_id', 'unknown')}: {str(e)}")
+                LOG.error(f"Error in attempt {attempt_idx + 1}: {str(e)}")
                 responses.append(f"Error: {str(e)}")
 
-        # Return result with all attempts
-        result = {
+        return {
             "responses": responses,
-            "generation": responses[0] if responses else "",  # First attempt as main generation
+            "generation": responses[0] if responses else "",
         }
-
-        return result
 
 
 @hydra.main(version_base=None, config_name="base_multi_challenge_generation_config")
 def main(cfg: MultiChallengeGenerationConfig):
-    """Main entry point for MultiChallenge generation."""
     cfg = MultiChallengeGenerationConfig(**cfg)
     setup_logging(disable_hydra_logs=False)
 
-    LOG.info("="*60)
+    LOG.info("=" * 80)
     LOG.info("MultiChallenge Generation")
-    LOG.info("="*60)
-    LOG.info(f"Input: {cfg.input_file}")
+    LOG.info(f"Input:  {cfg.input_file}")
     LOG.info(f"Output: {cfg.output_file}")
-    LOG.info(f"Model: {cfg.server.get('model', 'N/A')}")
     LOG.info(f"Attempts: {cfg.attempts}")
-    LOG.info(f"Max samples: {cfg.max_samples}")
-    LOG.info("="*60)
+    LOG.info("=" * 80)
 
     if cfg.dry_run:
-        LOG.info("Dry run mode - loading data only")
-        task = MultiChallengeGenerationTask(cfg)
-        task.load_data()
-        task.log_example_prompt(task.data)
+        LOG.info("Dry run mode - skipping generation")
         return
 
-    # Run generation
     task = MultiChallengeGenerationTask(cfg)
     task.generate()
 
-    LOG.info("="*60)
     LOG.info("Generation completed successfully!")
     LOG.info(f"Results saved to: {cfg.output_file}")
-    LOG.info("="*60)
 
 
 if __name__ == "__main__":

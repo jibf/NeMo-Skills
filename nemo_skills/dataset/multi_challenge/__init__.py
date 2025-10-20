@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DATASET_GROUP = "tool"
+DATASET_GROUP = "chat"
 
-SPLITS = ["test"]
+SPLITS = [
+    "inference_memory",
+    "instruction_retention",
+    "reliable_version_editing",
+    "self_coherence",
+]
 
-IS_BENCHMARK_GROUP = False
-
+IS_BENCHMARK_GROUP = True
 SCORE_MODULE = "nemo_skills.dataset.multi_challenge.multi_challenge_score"
-
-BENCHMARKS = {"multi_challenge": {}}
+BENCHMARKS = {f"multi_challenge.{split}": {} for split in SPLITS}

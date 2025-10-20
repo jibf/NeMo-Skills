@@ -12,35 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-*.json
-*.tar.gz
-*.tar
-*.npy
-*.info
-*.jsonl
-*.csv
-nemo_experiments
-wandb
-build
-.hypothesis
-*.zip
-*.egg-info
-*.xml
-*.DS_Store
-.coverage
-.venv
-*.lock
-
-__pycache__
-.ipynb_checkpoints
-
-cluster_configs/*
-!cluster_configs/example-*.yaml
-
-nemo_skills/dataset/ruler/*/
-nemo_skills/dataset/bfcl_v3/*/
-nemo_skills/dataset/aalcr/lcr/
-.idea/
-.idea/*
-CLAUDE.md
-!nemo_skills/dataset/multi_challenge/*/test.jsonl
+DATASET_GROUP = "chat"
+METRICS_TYPE = "multi_challenge"
+EVAL_ARGS = "++eval_type=multi_challenge"
+GENERATION_ARGS = "++prompt_format=openai"
+GENERATION_MODULE = "nemo_skills.inference.eval.multi_challenge"

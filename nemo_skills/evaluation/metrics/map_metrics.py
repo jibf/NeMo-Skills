@@ -33,6 +33,7 @@ from nemo_skills.evaluation.metrics.ioi_metrics import IOIMetrics
 from nemo_skills.evaluation.metrics.lean4_metrics import Lean4Metrics
 from nemo_skills.evaluation.metrics.math_metrics import MathMetrics
 from nemo_skills.evaluation.metrics.mrcr_metrics import MRCRMetrics
+from nemo_skills.evaluation.metrics.multi_challenge_metrics import MultiChallengeMetrics
 from nemo_skills.evaluation.metrics.ruler_metrics import RulerMetrics
 from nemo_skills.evaluation.metrics.simpleqa_metrics import SimpleQAMetrics
 from nemo_skills.evaluation.metrics.translation_metrics import TranslationMetrics
@@ -50,6 +51,7 @@ METRICS_MAP = {
     "if": IFMetrics,
     "ioi": IOIMetrics,
     "multichoice": MathMetrics,
+    "multi_challenge": MultiChallengeMetrics,
     "ruler": RulerMetrics,
     "livecodebench": LiveCodeBenchMetrics,
     "swe-bench": SweBenchMetrics,

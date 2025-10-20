@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,86 +12,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Score computation for MultiChallenge benchmark.
-"""
+def compute_score(metrics: dict) -> dict:
+    """Aggregate metrics across all MultiChallenge task types."""
+    task_type_data = {}
+    total_questions = 0
 
-import json
-import sys
-from pathlib import Path
+    for key, value in metrics.items():
+        if key.startswith("multi_challenge."):
+            task_type = key.split(".", 1)[1]
+            if "pass@1" in value:
+                accuracy = value["pass@1"].get("accuracy", 0.0)
+                num_entries = value["pass@1"].get("num_entries", 0)
+                task_type_data[task_type] = {'accuracy': accuracy, 'num_entries': num_entries}
+                total_questions += num_entries
 
-from nemo_skills.evaluation.metrics.multi_challenge_metrics import (
-    compute_metrics,
-    format_metrics_report,
-)
+    if task_type_data:
+        accuracies = [data['accuracy'] for data in task_type_data.values()]
+        overall_accuracy_unweighted = sum(accuracies) / len(accuracies)
+        weighted_sum = sum(data['accuracy'] * data['num_entries'] for data in task_type_data.values())
+        overall_accuracy_weighted = weighted_sum / total_questions if total_questions > 0 else 0.0
+    else:
+        overall_accuracy_unweighted = 0.0
+        overall_accuracy_weighted = 0.0
 
+    result = {
+        "pass@1": {
+            'overall_accuracy_unweighted': overall_accuracy_unweighted,
+            'overall_accuracy_weighted': overall_accuracy_weighted,
+            'num_entries': total_questions,
+        }
+    }
 
-def collect_results_from_file(file_path):
-    """Read and collect results from a JSONL file."""
-    results = []
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            if line.strip():
-                results.append(json.loads(line))
-    return results
+    for task_type, data in task_type_data.items():
+        result["pass@1"][f'{task_type}_accuracy'] = data['accuracy']
 
-
-def main(input_file, output_file=None):
-    """Main function to compute and report scores.
-
-    Args:
-        input_file: Path to the evaluated results JSONL file
-        output_file: Optional path to save the report
-    """
-    input_path = Path(input_file)
-
-    if not input_path.exists():
-        print(f"Error: Input file not found: {input_file}")
-        sys.exit(1)
-
-    # Collect results
-    results = collect_results_from_file(input_path)
-
-    if not results:
-        print(f"Error: No results found in {input_file}")
-        sys.exit(1)
-
-    # Compute metrics
-    metrics = compute_metrics(results)
-
-    # Format report
-    report = format_metrics_report(metrics)
-
-    # Print to console
-    print(report)
-
-    # Save to file if requested
-    if output_file:
-        output_path = Path(output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(report)
-
-        print(f"\nReport saved to: {output_file}")
-
-        # Also save JSON metrics
-        json_output = output_path.with_suffix('.json')
-        with open(json_output, 'w', encoding='utf-8') as f:
-            json.dump(metrics, f, indent=2)
-
-        print(f"JSON metrics saved to: {json_output}")
-
-    return metrics
+    _print_summary(task_type_data, overall_accuracy_weighted, overall_accuracy_unweighted, total_questions)
+    return result
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python multi_challenge_score.py <input_file> [output_file]")
-        print("Example: python multi_challenge_score.py results.jsonl report.txt")
-        sys.exit(1)
+def _print_summary(axis_data, overall_weighted, overall_unweighted, total):
+    print("\n" + "=" * 80)
+    print(" MultiChallenge Benchmark Results ".center(80))
+    print("=" * 80)
 
-    input_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else None
+    if axis_data:
+        print(f"\n{'Task Type':<35} {'Accuracy':<15}")
+        print("-" * 80)
 
-    main(input_file, output_file)
+        for axis, data in axis_data.items():
+            axis_display = axis.replace('_', ' ').title()
+            print(f"{axis_display:<35} {data['accuracy']:>6.2f}%")
+
+        print("-" * 80)
+
+    print(f"{'Overall Score (Unweighted)':<35} {overall_unweighted:>6.2f}%        {total:>5} questions")
+    print(f"{'Overall Score (Weighted)':<35} {overall_weighted:>6.2f}%")
+    print("=" * 80 + "\n")
