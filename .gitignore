@@ -43,4 +43,4 @@ nemo_skills/dataset/aalcr/lcr/
 .idea/
 .idea/*
 CLAUDE.md
-!nemo_skills/dataset/multi_challenge/*/test.jsonl
+!nemo_skills/dataset/multi_challenge/benchmark_questions.jsonl
