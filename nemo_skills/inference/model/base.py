@@ -228,6 +228,8 @@ class BaseModel:
         stream: bool = False,
         reasoning_effort: str | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | None = None,
+        parallel_tool_calls: str | None = None,
         include_response: bool = False,
         extra_body: dict = None,
     ) -> dict:
@@ -255,6 +257,8 @@ class BaseModel:
             "reasoning_effort": reasoning_effort,
             "tools": tools,
             "extra_body": extra_body,
+            "tool_choice": tool_choice,
+            "parallel_tool_calls": parallel_tool_calls,
         }
 
         # TODO: remove this after we no longer use gpt-oss or it's fixed in vllm

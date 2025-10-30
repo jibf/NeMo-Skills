@@ -100,6 +100,8 @@ class OpenAIModel(BaseModel):
         reasoning_effort: str | None,
         extra_body: dict = None,
         tools: list[dict] | None = None,
+        tool_choice: str | None = None,
+        parallel_tool_calls: str | None = None,
     ) -> dict:
         # Validations
         if top_k != -1:
@@ -117,6 +119,10 @@ class OpenAIModel(BaseModel):
             "stream": stream,
             "tools": tools,
         }
+        if tool_choice is not None:
+            params.update({"tool_choice": tool_choice})
+        if parallel_tool_calls is not None:
+            params.update({"parallel_tool_calls": parallel_tool_calls})
 
         if self._is_reasoning_model(self.model):
             # Reasoning model specific validations and parameters

@@ -34,6 +34,7 @@ from nemo_skills.evaluation.evaluator.math import (
 )
 from nemo_skills.evaluation.evaluator.mcq import eval_mcq
 from nemo_skills.evaluation.evaluator.mrcr import eval_mrcr
+from nemo_skills.evaluation.evaluator.nexusbench import eval_nexusbench
 from nemo_skills.evaluation.evaluator.ruler import eval_ruler
 from nemo_skills.evaluation.evaluator.scicode import eval_scicode
 
@@ -43,6 +44,7 @@ EVALUATOR_MAP = {
     "if": eval_if,
     "ifbench": eval_ifbench,
     "bfcl": eval_bfcl,
+    "nexusbench": eval_nexusbench,
     "multichoice": eval_mcq,
     "ruler": eval_ruler,
     "livecodebench": eval_livecodebench,

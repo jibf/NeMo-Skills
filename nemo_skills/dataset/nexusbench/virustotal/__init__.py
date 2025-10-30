@@ -1,0 +1,5 @@
+DATASET_GROUP = "tool"
+METRICS_TYPE = "nexusbench"
+EVAL_ARGS = "++eval_type=nexusbench"
+GENERATION_ARGS = ""
+GENERATION_MODULE = "nemo_skills.inference.eval.nexusbench"
