@@ -24,3 +24,7 @@ SPLITS = [
 IS_BENCHMARK_GROUP = True
 SCORE_MODULE = "nemo_skills.dataset.multi_challenge.multi_challenge_score"
 BENCHMARKS = {f"multi_challenge.{split}": {} for split in SPLITS}
+
+# Evaluation configuration - tells users to add ++eval_type=multi_challenge during generation
+GENERATION_ARGS = "++eval_type=multi_challenge"
+GENERATION_MODULE = "nemo_skills.inference.eval.multi_challenge"

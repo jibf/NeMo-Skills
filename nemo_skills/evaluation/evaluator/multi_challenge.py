@@ -19,17 +19,18 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from nemo_skills.evaluation.evaluator.base import BaseEvaluatorConfig
 from nemo_skills.evaluation.metrics.multi_challenge_metrics import (
     compute_metrics,
     format_metrics_report,
 )
-from nemo_skills.utils import get_logger_name, nested_dataclass, unroll_files
+from nemo_skills.utils import get_logger_name, nested_dataclass
 
 LOG = logging.getLogger(get_logger_name(__file__))
 
 
 @nested_dataclass(kw_only=True)
-class MultiChallengeEvaluatorConfig:
+class MultiChallengeEvaluatorConfig(BaseEvaluatorConfig):
     judge_model: str = "openai/gpt-4o-20240806"
     judge_base_url: str = "https://api.openai.com/v1"
     judge_api_key: str | None = None
@@ -85,7 +86,7 @@ def evaluate_single_response(judge_client, response, target_question, pass_crite
 
 
 def eval_multi_challenge(cfg):
-    eval_config = MultiChallengeEvaluatorConfig(**cfg.eval_config)
+    eval_config = MultiChallengeEvaluatorConfig(**cfg)
 
     try:
         from openai import OpenAI
@@ -99,100 +100,104 @@ def eval_multi_challenge(cfg):
 
     LOG.info(f"Judge model: {eval_config.judge_model}, Workers: {eval_config.max_workers}")
 
-    for jsonl_file in unroll_files(cfg.input_files):
-        LOG.info(f"Evaluating {jsonl_file}")
+    jsonl_file = eval_config.input_file
+    if jsonl_file is None:
+        raise ValueError("input_file is required for multi_challenge evaluation")
 
-        data = []
-        with open(jsonl_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                data.append(json.loads(line))
+    LOG.info(f"Evaluating {jsonl_file}")
 
-        eval_tasks = []
-        for idx, item in enumerate(data):
-            responses = item.get("responses", [item.get("generation", "")])
-            if not isinstance(responses, list):
-                responses = [responses]
+    data = []
+    with open(jsonl_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            data.append(json.loads(line))
 
-            for resp_idx, response in enumerate(responses):
-                eval_tasks.append({
-                    "data_idx": idx,
-                    "resp_idx": resp_idx,
-                    "response": response,
-                    "target_question": item["target_question"],
-                    "pass_criteria": item["pass_criteria"],
-                    "item_id": f"{item.get('question_id', idx)}_attempt{resp_idx}",
-                })
+    eval_tasks = []
+    for idx, item in enumerate(data):
+        responses = item.get("responses", [item.get("generation", "")])
+        if not isinstance(responses, list):
+            responses = [responses]
 
-        LOG.info(f"Loaded {len(data)} conversations, {len(eval_tasks)} evaluation tasks")
+        for resp_idx, response in enumerate(responses):
+            eval_tasks.append({
+                "data_idx": idx,
+                "resp_idx": resp_idx,
+                "response": response,
+                "target_question": item["target_question"],
+                "pass_criteria": item["pass_criteria"],
+                "item_id": f"{item.get('question_id', idx)}_attempt{resp_idx}",
+            })
 
-        results = {}
-        with ThreadPoolExecutor(max_workers=eval_config.max_workers) as executor:
-            futures = {
-                executor.submit(
-                    evaluate_single_response,
-                    judge_client,
-                    task["response"],
-                    task["target_question"],
-                    task["pass_criteria"],
-                    eval_config,
-                    task["item_id"],
-                ): task
-                for task in eval_tasks
-            }
+    LOG.info(f"Loaded {len(data)} conversations, {len(eval_tasks)} evaluation tasks")
 
-            with tqdm(total=len(eval_tasks), desc="Evaluating") as pbar:
-                for future in as_completed(futures):
-                    task = futures[future]
-                    results[(task["data_idx"], task["resp_idx"])] = future.result()
-                    pbar.update(1)
-        for idx, item in enumerate(data):
-            responses = item.get("responses", [item.get("generation", "")])
-            if not isinstance(responses, list):
-                responses = [responses]
-
-            evaluations = []
-            for resp_idx in range(len(responses)):
-                key = (idx, resp_idx)
-                if key in results:
-                    eval_result = results[key]
-                    evaluations.append({
-                        "reasoning": eval_result["reasoning"],
-                        "verdict": eval_result["verdict"],
-                        "passed": eval_result["passed"],
-                    })
-                else:
-                    evaluations.append({"reasoning": "Evaluation missing", "verdict": "NO", "passed": False})
-
-            item["evaluations"] = evaluations
-            item["is_correct"] = any(e["passed"] for e in evaluations)
-            item["num_passed"] = sum(e["passed"] for e in evaluations)
-            item["num_total"] = len(evaluations)
-
-        with open(jsonl_file, 'w', encoding='utf-8') as f:
-            for item in data:
-                f.write(json.dumps(item) + '\n')
-
-        metrics = compute_metrics(data)
-        report = format_metrics_report(metrics)
-        print("\n" + "=" * 60)
-        print(report)
-        print("=" * 60 + "\n")
-
-        output_dir = Path(jsonl_file).parent
-        task_type = output_dir.name
-
-        nested_metrics = {
-            f"multi_challenge.{task_type}": {
-                "pass@1": {
-                    "accuracy": metrics['overall_score'],
-                    "num_entries": metrics['total_questions'],
-                }
-            }
+    results = {}
+    with ThreadPoolExecutor(max_workers=eval_config.max_workers) as executor:
+        futures = {
+            executor.submit(
+                evaluate_single_response,
+                judge_client,
+                task["response"],
+                task["target_question"],
+                task["pass_criteria"],
+                eval_config,
+                task["item_id"],
+            ): task
+            for task in eval_tasks
         }
 
-        with open(output_dir / "metrics.json", 'w', encoding='utf-8') as f:
-            json.dump(nested_metrics, f, indent=2)
-        with open(output_dir / "report.txt", 'w', encoding='utf-8') as f:
-            f.write(report)
+        with tqdm(total=len(eval_tasks), desc="Evaluating") as pbar:
+            for future in as_completed(futures):
+                task = futures[future]
+                results[(task["data_idx"], task["resp_idx"])] = future.result()
+                pbar.update(1)
 
-        LOG.info(f"Evaluation complete. Metrics saved to {output_dir / 'metrics.json'}")
+    for idx, item in enumerate(data):
+        responses = item.get("responses", [item.get("generation", "")])
+        if not isinstance(responses, list):
+            responses = [responses]
+
+        evaluations = []
+        for resp_idx in range(len(responses)):
+            key = (idx, resp_idx)
+            if key in results:
+                eval_result = results[key]
+                evaluations.append({
+                    "reasoning": eval_result["reasoning"],
+                    "verdict": eval_result["verdict"],
+                    "passed": eval_result["passed"],
+                })
+            else:
+                evaluations.append({"reasoning": "Evaluation missing", "verdict": "NO", "passed": False})
+
+        item["evaluations"] = evaluations
+        item["is_correct"] = any(e["passed"] for e in evaluations)
+        item["num_passed"] = sum(e["passed"] for e in evaluations)
+        item["num_total"] = len(evaluations)
+
+    with open(jsonl_file, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
+    metrics = compute_metrics(data)
+    report = format_metrics_report(metrics)
+    print("\n" + "=" * 60)
+    print(report)
+    print("=" * 60 + "\n")
+
+    output_dir = Path(jsonl_file).parent
+    task_type = output_dir.name
+
+    nested_metrics = {
+        f"multi_challenge.{task_type}": {
+            "pass@1": {
+                "accuracy": metrics['overall_score'],
+                "num_entries": metrics['total_questions'],
+            }
+        }
+    }
+
+    with open(output_dir / "metrics.json", 'w', encoding='utf-8') as f:
+        json.dump(nested_metrics, f, indent=2)
+    with open(output_dir / "report.txt", 'w', encoding='utf-8') as f:
+        f.write(report)
+
+    LOG.info(f"Evaluation complete. Metrics saved to {output_dir / 'metrics.json'}")
